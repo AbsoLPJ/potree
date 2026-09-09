@@ -124,6 +124,14 @@ export class EptLazBatcher {
 					new THREE.BufferAttribute(indices, 4));
 			g.setAttribute('gps-time',
 					new THREE.BufferAttribute(gpsTime, 1));
+
+			// Normales, si le fichier en portait. L'attribut doit s'appeler
+			// exactement "normal" : c'est le nom qu'attend le shader de Potree
+			// (attribute vec3 normal), donc la coloration par normales.
+			if (e.data.normal) {
+				g.setAttribute('normal',
+					new THREE.BufferAttribute(new Float32Array(e.data.normal), 3));
+			}
 			this.node.gpsTime = e.data.gpsMeta;
 
 			g.attributes.indices.normalized = true;

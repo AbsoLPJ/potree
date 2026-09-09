@@ -25,6 +25,22 @@ async function readUsingDataView(event) {
 
 	const view = Copc.Las.View.create(buffer, header, eb)
 
+	// --- Normales : dimensions supplementaires optionnelles ---------------
+	//
+	// Le decodeur d'origine n'extrait que les dimensions LAS standard. Les
+	// normales arrivent en "extra bytes" et leur nom depend du logiciel qui a
+	// ecrit le fichier : PDAL ecrit NormalX/Y/Z, d'autres "normal x". On
+	// accepte donc plusieurs orthographes, et l'on n'alloue rien si aucune
+	// n'est presente.
+	const NORMAL_DIMENSION_SETS = [
+		['NormalX', 'NormalY', 'NormalZ'],
+		['normal x', 'normal y', 'normal z'],
+		['nx', 'ny', 'nz'],
+	];
+	const normalDims = NORMAL_DIMENSION_SETS.find(
+		(set) => set.every((name) => view.dimensions[name])
+	) || null;
+
 	const buffers = {
 		position: new ArrayBuffer(pointCount * 3 * 4),
 		color: new ArrayBuffer(pointCount * 3 * 2),
@@ -35,6 +51,7 @@ async function readUsingDataView(event) {
 		pointSourceId: new ArrayBuffer(pointCount * 2),
 		gpsTime: new ArrayBuffer(pointCount * 4),
 		indices: new ArrayBuffer(pointCount * 4),
+		...(normalDims && { normal: new ArrayBuffer(pointCount * 3 * 4) }),
 	}
 	const tempBuffers = {
 		gpsTime64: new ArrayBuffer(pointCount * 8),
@@ -53,6 +70,7 @@ async function readUsingDataView(event) {
 		gpsTime64: new Float64Array(tempBuffers.gpsTime64),
 		gpsTime32: new Float32Array(buffers.gpsTime),
 		indices: new Uint32Array(buffers.indices),
+		...(normalDims && { normal: new Float32Array(buffers.normal) }),
 	}
 
 	const mean = [0, 0, 0];
@@ -71,6 +89,11 @@ async function readUsingDataView(event) {
 			red: view.getter('Red'),
 			green: view.getter('Green'),
 			blue: view.getter('Blue'),
+		}),
+		...(normalDims && {
+			normalX: view.getter(normalDims[0]),
+			normalY: view.getter(normalDims[1]),
+			normalZ: view.getter(normalDims[2]),
 		}),
 	}
 
@@ -102,6 +125,12 @@ async function readUsingDataView(event) {
 		views.position[3 * i + 0] = x;
 		views.position[3 * i + 1] = y;
 		views.position[3 * i + 2] = z;
+
+		if (normalDims) {
+			views.normal[3 * i + 0] = get.normalX(i);
+			views.normal[3 * i + 1] = get.normalY(i);
+			views.normal[3 * i + 2] = get.normalZ(i);
+		}
 
 		mean[0] += x / pointCount;
 		mean[1] += y / pointCount;
