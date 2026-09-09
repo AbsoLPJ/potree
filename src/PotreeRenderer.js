@@ -857,7 +857,14 @@ export class Renderer {
 
 			const geometry = node.geometryNode.geometry;
 
-			if (!geometry) console.log('Missing geometry', node)
+			// Un noeud dont la geometrie a ete dechargee par le LRU peut encore
+			// figurer dans la liste des noeuds visibles. Le code d'origine le
+			// signalait puis continuait, et levait aussitot une TypeError sur
+			// geometry.attributes — ce qui interrompait le rendu, et faisait
+			// notamment echouer le pointage pendant le deplacement d'un sommet.
+			if (!geometry) {
+				continue;
+			}
 			if(geometry.attributes["gps-time"]){
 				const bufferAttribute = geometry.attributes["gps-time"];
 				const attGPS = octree.getAttribute("gps-time");
