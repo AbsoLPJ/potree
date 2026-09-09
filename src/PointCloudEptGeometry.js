@@ -87,6 +87,18 @@ class BaseGeometry {
 	}
 }
 
+// Doit rester en accord avec NORMAL_DIMENSION_SETS du decodeur
+// (src/workers/EptLaszipDecoderWorker.js) : declarer un attribut que le
+// decodeur ne remplit pas donnerait un nuage noir sans explication.
+//
+// Constante de module et non champ statique : rollup 1.x, employe par le build
+// de Potree, ne sait pas analyser les champs statiques de classe.
+const NORMAL_EXTRA_BYTE_NAMES = [
+	['NormalX', 'NormalY', 'NormalZ'],
+	['normal x', 'normal y', 'normal z'],
+	['nx', 'ny', 'nz'],
+];
+
 export class PointCloudCopcGeometry extends BaseGeometry {
 	static parse({ header, info, wkt }) {
 		return {
@@ -106,6 +118,19 @@ export class PointCloudCopcGeometry extends BaseGeometry {
 		this.pages = { '0-0-0-0': copc.info.rootHierarchyPage }
 
 		this.loader = new Potree.CopcLaszipLoader();
+
+		// Les normales arrivent en "extra bytes" et ne figurent donc pas dans la
+		// liste d'attributs standard. On les declare quand le fichier en porte,
+		// pour qu'elles apparaissent comme les autres — notamment dans les
+		// interfaces qui listent les colorations disponibles.
+		const ebNames = (copc.eb || []).map((e) => (e && e.name ? e.name : ''));
+		const hasNormals = NORMAL_EXTRA_BYTE_NAMES.some(
+			(set) => set.every((name) => ebNames.includes(name))
+		);
+		if (hasNormals) {
+			this.pointAttributes.add(
+				new PointAttribute("normal", PointAttributeTypes.DATA_TYPE_FLOAT, 3));
+		}
 	}
 
 	async loadHierarchyPage(key) {
