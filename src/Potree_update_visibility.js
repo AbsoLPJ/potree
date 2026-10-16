@@ -297,11 +297,17 @@ export function updateVisibility(pointclouds, camera, renderer){
 		pointcloud.numVisiblePoints += node.getNumPoints();
 
 		if (node.isGeometryNode() && (!parent || parent.isTreeNode())) {
-			if (node.isLoaded() && loadedToGPUThisFrame < 2) {
+			// Plafond des envois au GPU par image : 2 a l'origine, soit 120 noeuds
+			// par seconde a 60 images. Avec seize chargements simultanes, les
+			// noeuds de COPC (une dizaine de milliers de points) arrivent plus vite.
+			if (node.isLoaded() && loadedToGPUThisFrame < 8) {
 				node = pointcloud.toTreeNode(node, parent);
 				loadedToGPUThisFrame++;
 			} else {
-				unloadedGeometry.push(node);
+				// Un noeud deja charge, en attente du GPU, n'occupe pas l'un des
+				// creneaux de chargement : la boucle de fin n'appelle load() que sur
+				// les premiers de cette liste, et load() n'y ferait rien.
+				if (!node.isLoaded()) unloadedGeometry.push(node);
 				visibleGeometry.push(node);
 			}
 		}
