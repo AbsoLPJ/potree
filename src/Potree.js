@@ -75,6 +75,15 @@ export {EarthControls} from "./navigation/EarthControls.js";
 export {DeviceOrientationControls} from "./navigation/DeviceOrientationControls.js";
 export {VRControls} from "./navigation/VRControls.js";
 
+import * as THREE from "../libs/three.js/build/three.module.js";
+
+// three.js est embarque dans ce bundle par rollup, sans etre reexporte : tout
+// code exterieur qui l'importerait de son cote creerait une SECONDE instance de
+// la bibliotheque, aux classes distinctes, dont les instanceof echouent en
+// silence. On expose donc l'instance reelle, seule facon de construire des
+// objets qui soient bien ceux de Potree.
+export { THREE };
+
 import "./extensions/OrthographicCamera.js";
 import "./extensions/PerspectiveCamera.js";
 import "./extensions/Ray.js";
