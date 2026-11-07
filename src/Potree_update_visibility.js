@@ -75,8 +75,12 @@ export function updateVisibilityStructures(pointclouds, camera, renderer) {
 		let camObjPos = new THREE.Vector3().setFromMatrixPosition(camMatrixObject);
 		camObjPositions.push(camObjPos);
 
+		// La racine passe à son rang, selon sa taille à l'écran, et non avant toutes les autres :
+		// sur une affaire de cent nuages, les cent racines épuisaient le budget, et les nuages
+		// servis les derniers n'étaient pas dessinés du tout, même au premier plan.
 		if (pointcloud.visible && pointcloud.root !== null) {
-			priorityQueue.push({pointcloud: i, node: pointcloud.root, weight: Number.MAX_VALUE});
+			let domHeight = renderer.domElement.clientHeight;
+			priorityQueue.push({pointcloud: i, node: pointcloud.root, weight: poidsDuNoeud(pointcloud.root, camObjPos, camera, domHeight)});
 		}
 
 		// hide all previously visible nodes
@@ -99,6 +103,24 @@ export function updateVisibilityStructures(pointclouds, camera, renderer) {
 	};
 };
 
+
+/**
+ * Le poids d'une racine dans la file : son rayon à l'écran, en pixels, comme pour les autres nœuds
+ * (voir plus bas, « add child nodes to priorityQueue ») ; infini si la caméra est dedans.
+ */
+function poidsDuNoeud(node, camObjPos, camera, domHeight){
+	if(!camera.isPerspectiveCamera){
+		let bb = node.getBoundingBox();
+		return bb.max.clone().sub(bb.min).length();
+	}
+	let sphere = node.getBoundingSphere();
+	let distance = sphere.center.distanceTo(camObjPos);
+	if(distance - sphere.radius < 0){
+		return Number.MAX_VALUE;
+	}
+	let slope = Math.tan((camera.fov * Math.PI) / 180 / 2);
+	return sphere.radius * (0.5 * domHeight) / (slope * distance);
+}
 
 export function updateVisibility(pointclouds, camera, renderer){
 
@@ -179,7 +201,9 @@ export function updateVisibility(pointclouds, camera, renderer){
 		visible = visible && !(numVisiblePoints + node.getNumPoints() > Potree.pointBudget);
 		visible = visible && !(numVisiblePointsInPointclouds.get(pointcloud) + node.getNumPoints() > pointcloud.pointBudget);
 		visible = visible && level < maxLevel;
-		visible = visible || node.getLevel() <= 2;
+		// Les premiers niveaux restent toujours affichés, mais seulement dans le champ : hors champ,
+		// ils prenaient le budget de ce qu'on regarde.
+		visible = visible || (insideFrustum && node.getLevel() <= 2);
 
 		let clipBoxes = pointcloud.material.clipBoxes;
 		if(true && clipBoxes.length > 0){
