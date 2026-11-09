@@ -185,6 +185,11 @@ export class PointCloudEptGeometry extends BaseGeometry {
 	}
 }
 
+// Apres un echec de chargement, attente avant de reessayer le meme noeud : elle double a chaque
+// echec, jusqu'au plafond. Sans elle, le noeud serait redemande a chaque image.
+const ATTENTE_ESSAI_MS = 1000;
+const ATTENTE_ESSAI_MAX_MS = 30000;
+
 export class PointCloudCopcGeometryNode extends PointCloudTreeNode {
 	constructor(owner, key, bounds) {
 		super();
@@ -247,16 +252,37 @@ export class PointCloudCopcGeometryNode extends PointCloudTreeNode {
 	async load() {
 		if (this.loaded || this.loading) return;
 		if (Potree.numNodesLoading >= Potree.maxNodesLoading) return;
+		if (this.prochainEssai && performance.now() < this.prochainEssai) return;
 
 		this.loading = true;
 		++Potree.numNodesLoading;
 
-		if (!this.nodeinfo) await this.loadHierarchy();
-		this.loadPoints();
+		try {
+			if (!this.nodeinfo) await this.loadHierarchy();
+			await this.loadPoints();
+		} catch (erreur) {
+			this.chargementEchoue(erreur);
+		}
 	}
 
 	loadPoints(){
-		this.owner.loader.load(this);
+		return this.owner.loader.load(this);
+	}
+
+	// Une place est prise exactement tant que `loading` est vrai : la rendre deux fois est impossible.
+	libererPlace() {
+		if (!this.loading) return;
+		this.loading = false;
+		--Potree.numNodesLoading;
+	}
+
+	// Sans cela, un chargement echoue gardait sa place pour toujours : une fois toutes les places
+	// prises, plus aucun point ne se chargeait.
+	chargementEchoue(erreur) {
+		this.libererPlace();
+		this.echecs = (this.echecs || 0) + 1;
+		this.prochainEssai = performance.now() + Math.min(ATTENTE_ESSAI_MAX_MS, ATTENTE_ESSAI_MS * 2 ** (this.echecs - 1));
+		if (this.echecs === 1) console.warn("Chargement d'un noeud du nuage impossible, nouvel essai bientot :", erreur);
 	}
 
 	async loadHierarchy() {
@@ -315,14 +341,20 @@ export class PointCloudCopcGeometryNode extends PointCloudTreeNode {
 	}
 
 	doneLoading(bufferGeometry, tightBoundingBox, np, mean) {
+		// Une reponse tardive, alors qu'un nouvel essai a deja abouti.
+		if (this.loaded) {
+			bufferGeometry.dispose();
+			return;
+		}
 		bufferGeometry.boundingBox = this.boundingBox;
 		this.geometry = bufferGeometry;
 		this.tightBoundingBox = tightBoundingBox;
 		this.numPoints = np;
 		this.mean = mean;
 		this.loaded = true;
-		this.loading = false;
-		--Potree.numNodesLoading;
+		this.echecs = 0;
+		this.prochainEssai = 0;
+		this.libererPlace();
 	}
 
 	dispose() {

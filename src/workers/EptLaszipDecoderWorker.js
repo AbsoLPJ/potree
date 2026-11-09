@@ -229,4 +229,11 @@ async function readUsingDataView(event) {
 	postMessage(message, transferables);
 };
 
-onmessage = readUsingDataView;
+// La lecture est asynchrone : son echec ne remonterait pas seul a la page, qui attendrait sans fin.
+onmessage = async (event) => {
+	try {
+		await readUsingDataView(event);
+	} catch (erreur) {
+		postMessage({ erreur: String(erreur) });
+	}
+};

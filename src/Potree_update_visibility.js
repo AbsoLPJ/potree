@@ -433,8 +433,13 @@ export function updateVisibility(pointclouds, camera, renderer){
 		}
 	}
 
-	for (let i = 0; i < Math.min(Potree.maxNodesLoading, unloadedGeometry.length); i++) {
+	// Un noeud qui attend de reessayer apres un echec ne compte pas : sinon, les premiers de la
+	// file, tous en echec, empechaient les suivants de se charger malgre des places libres.
+	const maintenant = performance.now();
+	for (let i = 0, demandes = 0; i < unloadedGeometry.length && demandes < Potree.maxNodesLoading; i++) {
+		if (unloadedGeometry[i].prochainEssai > maintenant) continue;
 		unloadedGeometry[i].load();
+		demandes++;
 	}
 
 	return {

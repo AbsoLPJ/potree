@@ -36,7 +36,7 @@ export class EptLaszipLoader {
 			}
 			handler.push(message)
 		} catch (e) {
-			console.log('Failed:', e)
+			node.chargementEchoue(e)
 		}
 	}
 };
@@ -76,7 +76,7 @@ export class CopcLaszipLoader {
 				nodemin: node.bounds.slice(0, 3),
 			})
 		} catch (e) {
-			console.log('Failed:', e)
+			node.chargementEchoue(e)
 		}
 	}
 };
@@ -92,7 +92,18 @@ export class EptLazBatcher {
 		let worker = Potree.workerPool.getWorker(workerPath);
 		const pointAttributes = this.node.owner.pointAttributes;
 
+		worker.onerror = (e) => {
+			this.node.chargementEchoue(e.message);
+			Potree.workerPool.returnWorker(workerPath, worker);
+		};
+
 		worker.onmessage = (e) => {
+			if (e.data.erreur) {
+				this.node.chargementEchoue(e.data.erreur);
+				Potree.workerPool.returnWorker(workerPath, worker);
+				return;
+			}
+
 			let g = new THREE.BufferGeometry();
 
 			let positions = new Float32Array(e.data.position);
